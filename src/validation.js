@@ -3,8 +3,8 @@
 // ── API key auth ─────────────────────────────────────────────────────────────
 
 function validateApiKey(req) {
-  const apiKey = process.env.API_KEY;
-  return req.headers['x-api-key'] === apiKey;
+  const secret = process.env.CHATBASE_WEBHOOK_SECRET;
+  return req.headers['x-chatbase-secret'] === secret;
 }
 
 // ── Order payload ────────────────────────────────────────────────────────────
