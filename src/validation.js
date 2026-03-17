@@ -1,43 +1,10 @@
 'use strict';
 
-const crypto = require('crypto');
-const logger = require('./logger');
+// ── API key auth ─────────────────────────────────────────────────────────────
 
-// ── Webhook signature ────────────────────────────────────────────────────────
-
-function validateWebhookSignature(req) {
-  const secret = process.env.CHATBASE_WEBHOOK_SECRET;
-
-  if (!secret) {
-    logger.warn('CHATBASE_WEBHOOK_SECRET is not set — skipping signature check (dev mode)');
-    return true;
-  }
-
-  const signature =
-    req.headers['x-chatbase-signature'] ||
-    req.headers['x-webhook-signature'];
-
-  if (!signature) {
-    return false;
-  }
-
-  try {
-    const hmac = crypto
-      .createHmac('sha256', secret)
-      .update(JSON.stringify(req.body))
-      .digest('hex');
-
-    const sigBuffer      = Buffer.from(signature, 'hex');
-    const hmacBuffer     = Buffer.from(hmac, 'hex');
-
-    if (sigBuffer.length !== hmacBuffer.length) {
-      return false;
-    }
-
-    return crypto.timingSafeEqual(sigBuffer, hmacBuffer);
-  } catch {
-    return false;
-  }
+function validateApiKey(req) {
+  const apiKey = process.env.API_KEY;
+  return req.headers['x-api-key'] === apiKey;
 }
 
 // ── Order payload ────────────────────────────────────────────────────────────
@@ -48,10 +15,10 @@ const sanitize = (val) =>
 function validateOrderPayload(body) {
   const errors = [];
 
-  // ── billing ──────────────────────────────────────────────────────────────
+  // ── billing ───────────────────────────────────────────────────────────────
   const b = body.billing || {};
 
-  const requiredBilling = ['first_name', 'last_name', 'address_1', 'city', 'country'];
+  const requiredBilling = ['first_name', 'last_name', 'phone', 'address_1', 'city', 'country'];
   for (const field of requiredBilling) {
     if (!b[field] || String(b[field]).trim() === '') {
       errors.push(`billing.${field} is required`);
@@ -64,23 +31,9 @@ function validateOrderPayload(body) {
     errors.push('billing.email is not a valid email address');
   }
 
-  // ── items ─────────────────────────────────────────────────────────────────
-  const rawItems = body.items;
-
-  if (!Array.isArray(rawItems) || rawItems.length === 0) {
-    errors.push('items must be a non-empty array');
-  } else {
-    rawItems.forEach((item, idx) => {
-      const pid = Number(item.product_id);
-      const qty = Number(item.quantity);
-
-      if (!Number.isInteger(pid) || pid <= 0) {
-        errors.push(`items[${idx}].product_id must be a positive integer`);
-      }
-      if (!Number.isInteger(qty) || qty <= 0) {
-        errors.push(`items[${idx}].quantity must be a positive integer`);
-      }
-    });
+  // ── order_note ────────────────────────────────────────────────────────────
+  if (!body.order_note || String(body.order_note).trim() === '') {
+    errors.push('order_note is required');
   }
 
   if (errors.length > 0) {
@@ -101,28 +54,9 @@ function validateOrderPayload(body) {
     country:    sanitize(b.country),
   };
 
-  const rawShipping = body.shipping;
-  const shipping = rawShipping
-    ? {
-        first_name: sanitize(rawShipping.first_name),
-        last_name:  sanitize(rawShipping.last_name),
-        address_1:  sanitize(rawShipping.address_1),
-        address_2:  sanitize(rawShipping.address_2),
-        city:       sanitize(rawShipping.city),
-        state:      sanitize(rawShipping.state),
-        postcode:   sanitize(rawShipping.postcode),
-        country:    sanitize(rawShipping.country),
-      }
-    : null;
+  const order_note = sanitize(body.order_note);
 
-  const items = rawItems.map((item) => ({
-    product_id: Number(item.product_id),
-    quantity:   Number(item.quantity),
-  }));
-
-  const note = body.note ? sanitize(body.note) : '';
-
-  return { valid: true, errors: [], parsed: { billing, shipping, items, note } };
+  return { valid: true, errors: [], parsed: { billing, order_note } };
 }
 
-module.exports = { validateWebhookSignature, validateOrderPayload };
+module.exports = { validateApiKey, validateOrderPayload };

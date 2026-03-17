@@ -1,17 +1,15 @@
 # wc-chatbase-middleware
 
-Express middleware that bridges [Chatbase](https://www.chatbase.co/) chatbot webhooks to WooCommerce orders via the WooCommerce REST API.
+Express middleware that receives orders from a Chatbase chatbot and creates WooCommerce orders via the REST API. The customer's free-text order is stored as a `customer_note`; staff fulfil from there.
 
 ---
 
 ## Endpoints
 
-| Method | Path                    | Description                                      |
-|--------|-------------------------|--------------------------------------------------|
-| GET    | `/health`               | Health check — returns `{ status, timestamp }`   |
-| GET    | `/products`             | List published, in-stock products                |
-| GET    | `/stock/:productId`     | Check stock for a single product                 |
-| POST   | `/webhook/chatbase`     | Receive Chatbase webhook and create WC order     |
+| Method | Path            | Description                              |
+|--------|-----------------|------------------------------------------|
+| GET    | `/health`       | Health check — returns `{ status, timestamp }` |
+| POST   | `/create-order` | Create a WooCommerce order from chat     |
 
 ---
 
@@ -27,28 +25,66 @@ npm install
 
 # 3. Configure environment
 cp .env.example .env
-# Edit .env with your WooCommerce credentials and webhook secret
+# Edit .env with your credentials
 
 # 4. Start the server
-npm start          # production
-npm run dev        # development (nodemon)
+npm start       # production
+npm run dev     # development (nodemon)
 ```
 
 ---
 
 ## Environment Variables
 
-| Variable                  | Required | Default            | Description                          |
-|---------------------------|----------|--------------------|--------------------------------------|
-| `WC_URL`                  | Yes      | —                  | WooCommerce store URL                |
-| `WC_KEY`                  | Yes      | —                  | WooCommerce consumer key             |
-| `WC_SECRET`               | Yes      | —                  | WooCommerce consumer secret          |
-| `CHATBASE_WEBHOOK_SECRET` | No*      | —                  | HMAC secret for webhook validation   |
-| `PAYMENT_METHOD`          | No       | `cod`              | WooCommerce payment method slug      |
-| `PAYMENT_METHOD_TITLE`    | No       | `Cash on Delivery` | Payment method display title         |
-| `PORT`                    | No       | `3000`             | Port the server listens on           |
+| Variable      | Required | Description                          |
+|---------------|----------|--------------------------------------|
+| `WC_URL`      | Yes      | WooCommerce store URL                |
+| `WC_KEY`      | Yes      | WooCommerce consumer key             |
+| `WC_SECRET`   | Yes      | WooCommerce consumer secret          |
+| `API_KEY`     | Yes      | Secret key checked via `x-api-key` header |
+| `APP_URL`     | No       | Public URL of this app (for reference) |
+| `STORE_NAME`  | No       | Store name (used in Chatbase prompt) |
+| `PORT`        | No       | Port the server listens on (default: 3000) |
 
-\* If not set, signature validation is skipped (development mode only — always set in production).
+---
+
+## POST /create-order
+
+### Auth
+
+Pass your `API_KEY` in the request header:
+
+```
+x-api-key: your-secret-api-key-here
+```
+
+### Request payload
+
+```json
+{
+  "billing": {
+    "first_name": "John",
+    "last_name":  "Smith",
+    "email":      "john@example.com",
+    "phone":      "+385911234567",
+    "address_1":  "123 Main Street",
+    "city":       "Zagreb",
+    "postcode":   "10000",
+    "country":    "HR"
+  },
+  "order_note": "2 burgers and a large coffee please"
+}
+```
+
+### Success response `201`
+
+```json
+{
+  "success": true,
+  "order_id": 1042,
+  "order_number": "1042"
+}
+```
 
 ---
 
@@ -58,85 +94,61 @@ npm run dev        # development (nodemon)
 2. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
 3. Select the repo. Railway auto-detects Node.js.
 4. Add all environment variables under **Variables** in the Railway dashboard.
-5. Railway assigns a public URL — use it as your Chatbase webhook URL:
-   ```
-   https://<your-app>.railway.app/webhook/chatbase
-   ```
+5. Your public URL will be something like `https://your-app.railway.app`.
 
 ### WP Engine IP Whitelist Note
 
-If your WooCommerce store is hosted on **WP Engine**, you must whitelist Railway's outbound IP addresses so API calls from this middleware are not blocked. Find Railway's current egress IPs in your Railway project settings under **Networking**, then add them to WP Engine's **IP Allow List** under **Sites → [your site] → Security**.
+If your WooCommerce store is hosted on **WP Engine**, whitelist Railway's outbound IPs so API calls are not blocked. Find the IPs in your Railway project under **Networking → Egress IPs**, then add them in WP Engine under **Sites → [your site] → Security → IP Allow List**.
 
 ---
 
-## Webhook Payload (Chatbase → this middleware)
+## Chatbase Tool Configuration
 
-```json
-{
-  "billing": {
-    "first_name": "Jane",
-    "last_name":  "Doe",
-    "email":      "jane@example.com",
-    "phone":      "+1 555 000 0000",
-    "address_1":  "123 Main St",
-    "address_2":  "",
-    "city":       "New York",
-    "state":      "NY",
-    "postcode":   "10001",
-    "country":    "US"
-  },
-  "shipping": null,
-  "items": [
-    { "product_id": 42, "quantity": 2 },
-    { "product_id": 87, "quantity": 1 }
-  ],
-  "note": "Please leave at the door"
-}
-```
+In Chatbase, create a tool with these settings:
 
-- `shipping` is optional. If omitted or `null`, the billing address is used as the shipping address.
-- `note` is optional.
-- `product_id` values must come from the `/products` endpoint (never guessed).
+| Setting     | Value                                              |
+|-------------|----------------------------------------------------|
+| Name        | `create_order`                                     |
+| Method      | `POST`                                             |
+| URL         | `https://your-app.railway.app/create-order`        |
+| Header      | `x-api-key` = *(your `API_KEY` value)*             |
+
+**Parameters to include:**
+
+- `billing` — object with: `first_name`, `last_name`, `email`, `phone`, `address_1`, `city`, `postcode`, `country`
+- `order_note` — string, the customer's free-text order
 
 ---
 
 ## Chatbase System Prompt Template
 
-Use this as the system prompt for your Chatbase agent:
-
 ```
-You are a helpful shopping assistant for [Store Name]. Your job is to help customers place orders.
+You are a friendly order assistant for [Store Name].
 
-## Your workflow
-1. Greet the customer and ask what they'd like to order.
-2. Call GET /products to retrieve the current product catalog before confirming any order.
-   Never assume product IDs — always use real IDs from /products.
-3. Collect the following information from the customer:
-   - First name and last name
-   - Email address
-   - Phone number
-   - Delivery address (street, city, state/region, postcode, country)
-   - Products and quantities they want
-4. Confirm the order summary with the customer in plain language before submitting.
-5. Submit the order via POST /webhook/chatbase using the exact payload format.
+Collect the following from the customer one at a time:
+- First name and last name
+- Email address
+- Phone number
+- Delivery address (street, city, postcode, country)
+- What they want to order
 
-## Rules
-- NEVER show raw JSON or API responses to the customer.
-- NEVER invent or guess product IDs — always fetch them from /products first.
-- If a product is out of stock, politely inform the customer and suggest alternatives.
-- If the order fails due to stock issues, inform the customer clearly.
-- Speak naturally and conversationally. Do not mention technical details like endpoints or webhooks.
-- Always confirm the full order (items, quantities, address, total if available) before placing it.
+Once all details are collected, read the full order back to the customer
+and ask them to confirm.
+
+Only when they confirm, call create_order with their details.
+Tell them their order number once the order is placed.
+
+Never show JSON or technical details to the customer.
+Never place an order without explicit confirmation from the customer.
 ```
 
 ---
 
 ## Security Features
 
-- **Helmet** — sets secure HTTP response headers (CSP, HSTS, X-Frame-Options, etc.)
-- **HMAC-SHA256 webhook signature** — validates every incoming webhook using `CHATBASE_WEBHOOK_SECRET`; uses `crypto.timingSafeEqual` to prevent timing attacks
+- **Helmet** — secure HTTP response headers (CSP, HSTS, X-Frame-Options, etc.)
+- **API key auth** — every request to `/create-order` must include the correct `x-api-key` header
 - **Rate limiting** — 60 req/min globally, 20 req/min on the order endpoint
-- **Body size limit** — `express.json({ limit: '10kb' })` prevents large payload attacks
-- **Input validation & sanitization** — all fields are validated, trimmed, and capped at 500 chars before use
-- **No stack traces in responses** — errors return generic messages; details are logged server-side only
-- **Stock validation before order** — prevents placing orders for out-of-stock or low-stock items
+- **Body size limit** — `express.json({ limit: '10kb' })` prevents oversized payloads
+- **Input validation & sanitization** — all fields validated, trimmed, and capped at 500 chars
+- **No stack traces in responses** — errors return generic messages; details logged server-side only
