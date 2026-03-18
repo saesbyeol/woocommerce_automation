@@ -25,12 +25,32 @@ async function getProducts() {
     per_page: 100,
   });
 
-  return data.map((p) => ({
-    id:    p.id,
-    name:  p.name,
-    price: p.price,
-    in_stock: p.stock_status === 'instock',
-  }));
+  const result = [];
+
+  for (const p of data) {
+    if (p.type === 'variable') {
+      // Fetch variations for variable products
+      try {
+        const { data: variations } = await getApi().get(`products/${p.id}/variations`, { per_page: 50 });
+        for (const v of variations) {
+          const varName = v.attributes.map((a) => a.option).join(' – ');
+          result.push({
+            id:           p.id,
+            variation_id: v.id,
+            name:         `${p.name} – ${varName}`,
+            price:        v.price,
+            in_stock:     v.stock_status === 'instock',
+          });
+        }
+      } catch {
+        result.push({ id: p.id, name: p.name, price: p.price, in_stock: p.stock_status === 'instock' });
+      }
+    } else {
+      result.push({ id: p.id, name: p.name, price: p.price, in_stock: p.stock_status === 'instock' });
+    }
+  }
+
+  return result;
 }
 
 // ── findProductByName ─────────────────────────────────────────────────────────
@@ -46,8 +66,27 @@ async function findProductByName(name) {
     throw new Error(`No product found matching "${name}"`);
   }
 
-  // Return the closest match (first result from WooCommerce search)
-  return data[0];
+  const product = data[0];
+
+  // If variable product, search variations for the best match
+  if (product.type === 'variable') {
+    const { data: variations } = await getApi().get(`products/${product.id}/variations`, { per_page: 50 });
+    const nameLower = name.toLowerCase();
+
+    // Try to find a variation whose attributes match the search name
+    const matched = variations.find((v) =>
+      v.attributes.some((a) => nameLower.includes(a.option.toLowerCase()))
+    );
+
+    if (matched) {
+      return { id: product.id, variation_id: matched.id };
+    }
+
+    // Fall back to first variation
+    return { id: product.id, variation_id: variations[0]?.id || null };
+  }
+
+  return { id: product.id, variation_id: null };
 }
 
 // ── createOrder ──────────────────────────────────────────────────────────────
@@ -55,20 +94,21 @@ async function findProductByName(name) {
 async function createOrder(parsed) {
   const { billing, line_items, order_note } = parsed;
 
-  // Resolve product names to real IDs
+  // Resolve product names to real IDs + variation IDs
   const resolvedItems = await Promise.all(line_items.map(async (item) => {
     const product = await findProductByName(item.product_name);
-    return { product_id: product.id, quantity: item.quantity };
+    return { product_id: product.id, variation_id: product.variation_id, quantity: item.quantity };
   }));
 
   const { data: order } = await getApi().post('orders', {
     status:               'pending',
     billing,
     shipping:             billing,
-    line_items:           resolvedItems.map((item) => ({
-      product_id: item.product_id,
-      quantity:   item.quantity,
-    })),
+    line_items:           resolvedItems.map((item) => {
+      const li = { product_id: item.product_id, quantity: item.quantity };
+      if (item.variation_id) li.variation_id = item.variation_id;
+      return li;
+    }),
     payment_method:       'cod',
     payment_method_title: 'Cash on Delivery',
     customer_note:        order_note || '',
