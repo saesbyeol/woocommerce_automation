@@ -33,16 +33,21 @@ async function getProducts() {
   }));
 }
 
-// ── validateProducts ─────────────────────────────────────────────────────────
+// ── findProductByName ─────────────────────────────────────────────────────────
 
-async function validateProducts(line_items) {
-  await Promise.all(line_items.map(async (item) => {
-    try {
-      await getApi().get(`products/${item.product_id}`);
-    } catch {
-      throw new Error(`Product ID ${item.product_id} does not exist in the store`);
-    }
-  }));
+async function findProductByName(name) {
+  const { data } = await getApi().get('products', {
+    search:   name,
+    status:   'publish',
+    per_page: 10,
+  });
+
+  if (!data || data.length === 0) {
+    throw new Error(`No product found matching "${name}"`);
+  }
+
+  // Return the closest match (first result from WooCommerce search)
+  return data[0];
 }
 
 // ── createOrder ──────────────────────────────────────────────────────────────
@@ -50,13 +55,17 @@ async function validateProducts(line_items) {
 async function createOrder(parsed) {
   const { billing, line_items, order_note } = parsed;
 
-  await validateProducts(line_items);
+  // Resolve product names to real IDs
+  const resolvedItems = await Promise.all(line_items.map(async (item) => {
+    const product = await findProductByName(item.product_name);
+    return { product_id: product.id, quantity: item.quantity };
+  }));
 
   const { data: order } = await getApi().post('orders', {
     status:               'pending',
     billing,
     shipping:             billing,
-    line_items:           line_items.map((item) => ({
+    line_items:           resolvedItems.map((item) => ({
       product_id: item.product_id,
       quantity:   item.quantity,
     })),

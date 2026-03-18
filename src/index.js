@@ -90,8 +90,8 @@ app.post('/create-order', orderLimiter, async (req, res) => {
     logger.info('Order created', { order_id: result.order_id, order_number: result.order_number });
     res.status(201).json({ success: true, order_id: result.order_id, order_number: result.order_number });
   } catch (err) {
-    if (err.message && err.message.includes('does not exist in the store')) {
-      logger.warn('Invalid product ID', { message: err.message });
+    if (err.message && err.message.includes('No product found matching')) {
+      logger.warn('Product not found', { message: err.message });
       return res.status(400).json({ success: false, message: err.message });
     }
     logger.error('Order creation failed', { message: err.message });

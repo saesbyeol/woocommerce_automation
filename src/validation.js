@@ -35,23 +35,23 @@ function validateOrderPayload(body) {
   }
 
   // ── line_items ────────────────────────────────────────────────────────────
-  // Support both line_items array and flat product_id + quantity fields
+  // Accept flat product_name + quantity fields or line_items array
   let rawItems = body.line_items;
 
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
-    const pid = Number(body.product_id);
-    const qty = Number(body.quantity) || 1;
-    if (Number.isInteger(pid) && pid > 0) {
-      rawItems = [{ product_id: pid, quantity: qty }];
+    const name = body.product_name ? String(body.product_name).trim() : '';
+    const qty  = Number(body.quantity) || 1;
+    if (name) {
+      rawItems = [{ product_name: name, quantity: qty }];
     } else {
-      errors.push('product_id is required');
+      errors.push('product_name is required');
     }
   } else {
     rawItems.forEach((item, idx) => {
-      const pid = Number(item.product_id);
-      const qty = Number(item.quantity);
-      if (!Number.isInteger(pid) || pid <= 0) {
-        errors.push(`line_items[${idx}].product_id must be a positive integer`);
+      const name = item.product_name ? String(item.product_name).trim() : '';
+      const qty  = Number(item.quantity);
+      if (!name) {
+        errors.push(`line_items[${idx}].product_name is required`);
       }
       if (!Number.isInteger(qty) || qty <= 0) {
         errors.push(`line_items[${idx}].quantity must be a positive integer`);
@@ -78,8 +78,8 @@ function validateOrderPayload(body) {
   };
 
   const line_items = rawItems.map((item) => ({
-    product_id: Number(item.product_id),
-    quantity:   Number(item.quantity),
+    product_name: String(item.product_name).trim().slice(0, 500),
+    quantity:     Number(item.quantity) || 1,
   }));
 
   const order_note = body.order_note ? sanitize(body.order_note) : '';
