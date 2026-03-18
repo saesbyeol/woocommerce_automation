@@ -33,10 +33,24 @@ async function getProducts() {
   }));
 }
 
+// ── validateProducts ─────────────────────────────────────────────────────────
+
+async function validateProducts(line_items) {
+  await Promise.all(line_items.map(async (item) => {
+    try {
+      await getApi().get(`products/${item.product_id}`);
+    } catch {
+      throw new Error(`Product ID ${item.product_id} does not exist in the store`);
+    }
+  }));
+}
+
 // ── createOrder ──────────────────────────────────────────────────────────────
 
 async function createOrder(parsed) {
   const { billing, line_items, order_note } = parsed;
+
+  await validateProducts(line_items);
 
   const { data: order } = await getApi().post('orders', {
     status:               'pending',
