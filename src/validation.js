@@ -31,9 +31,21 @@ function validateOrderPayload(body) {
     errors.push('billing.email is not a valid email address');
   }
 
-  // ── order_note ────────────────────────────────────────────────────────────
-  if (!body.order_note || String(body.order_note).trim() === '') {
-    errors.push('order_note is required');
+  // ── line_items ────────────────────────────────────────────────────────────
+  const rawItems = body.line_items;
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    errors.push('line_items must be a non-empty array');
+  } else {
+    rawItems.forEach((item, idx) => {
+      const pid = Number(item.product_id);
+      const qty = Number(item.quantity);
+      if (!Number.isInteger(pid) || pid <= 0) {
+        errors.push(`line_items[${idx}].product_id must be a positive integer`);
+      }
+      if (!Number.isInteger(qty) || qty <= 0) {
+        errors.push(`line_items[${idx}].quantity must be a positive integer`);
+      }
+    });
   }
 
   if (errors.length > 0) {
@@ -54,9 +66,14 @@ function validateOrderPayload(body) {
     country:    sanitize(b.country),
   };
 
-  const order_note = sanitize(body.order_note);
+  const line_items = rawItems.map((item) => ({
+    product_id: Number(item.product_id),
+    quantity:   Number(item.quantity),
+  }));
 
-  return { valid: true, errors: [], parsed: { billing, order_note } };
+  const order_note = body.order_note ? sanitize(body.order_note) : '';
+
+  return { valid: true, errors: [], parsed: { billing, line_items, order_note } };
 }
 
 module.exports = { validateApiKey, validateOrderPayload };

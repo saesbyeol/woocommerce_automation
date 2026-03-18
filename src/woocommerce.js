@@ -17,19 +17,38 @@ const getApi = () => {
   return _api;
 };
 
+// ── getProducts ──────────────────────────────────────────────────────────────
+
+async function getProducts() {
+  const { data } = await getApi().get('products', {
+    status:   'publish',
+    per_page: 100,
+  });
+
+  return data.map((p) => ({
+    id:    p.id,
+    name:  p.name,
+    price: p.price,
+    in_stock: p.stock_status === 'instock',
+  }));
+}
+
 // ── createOrder ──────────────────────────────────────────────────────────────
 
 async function createOrder(parsed) {
-  const { billing, order_note } = parsed;
+  const { billing, line_items, order_note } = parsed;
 
   const { data: order } = await getApi().post('orders', {
     status:               'pending',
     billing,
     shipping:             billing,
-    line_items:           [],
+    line_items:           line_items.map((item) => ({
+      product_id: item.product_id,
+      quantity:   item.quantity,
+    })),
     payment_method:       'cod',
     payment_method_title: 'Cash on Delivery',
-    customer_note:        order_note,
+    customer_note:        order_note || '',
   });
 
   return {
@@ -38,4 +57,4 @@ async function createOrder(parsed) {
   };
 }
 
-module.exports = { createOrder };
+module.exports = { getProducts, createOrder };

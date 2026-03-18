@@ -7,7 +7,7 @@ const helmet    = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const logger    = require('./logger');
-const { createOrder } = require('./woocommerce');
+const { getProducts, createOrder } = require('./woocommerce');
 const { validateApiKey, validateOrderPayload } = require('./validation');
 
 const app  = express();
@@ -50,6 +50,20 @@ app.use(globalLimiter);
 // GET /health
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// GET /products
+app.get('/products', async (req, res) => {
+  if (!validateApiKey(req)) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  try {
+    const products = await getProducts();
+    res.json({ success: true, products });
+  } catch (err) {
+    logger.error('Failed to fetch products', { message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch products' });
+  }
 });
 
 // POST /create-order
