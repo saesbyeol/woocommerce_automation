@@ -15,26 +15,37 @@ const sanitize = (val) =>
 function validateOrderPayload(body) {
   const errors = [];
 
-  // ── billing ───────────────────────────────────────────────────────────────
-  const b = body.billing || {};
+  // Support both flat top-level fields (from Chatbase) and nested billing object
+  const b = (body.billing && typeof body.billing === 'object')
+    ? body.billing
+    : body;
 
+  // ── billing ───────────────────────────────────────────────────────────────
   const requiredBilling = ['first_name', 'last_name', 'phone', 'address_1', 'city', 'country'];
   for (const field of requiredBilling) {
     if (!b[field] || String(b[field]).trim() === '') {
-      errors.push(`billing.${field} is required`);
+      errors.push(`${field} is required`);
     }
   }
 
   if (!b.email || String(b.email).trim() === '') {
-    errors.push('billing.email is required');
+    errors.push('email is required');
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(b.email).trim())) {
-    errors.push('billing.email is not a valid email address');
+    errors.push('email is not a valid email address');
   }
 
   // ── line_items ────────────────────────────────────────────────────────────
-  const rawItems = body.line_items;
+  // Support both line_items array and flat product_id + quantity fields
+  let rawItems = body.line_items;
+
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
-    errors.push('line_items must be a non-empty array');
+    const pid = Number(body.product_id);
+    const qty = Number(body.quantity) || 1;
+    if (Number.isInteger(pid) && pid > 0) {
+      rawItems = [{ product_id: pid, quantity: qty }];
+    } else {
+      errors.push('product_id is required');
+    }
   } else {
     rawItems.forEach((item, idx) => {
       const pid = Number(item.product_id);
@@ -59,10 +70,10 @@ function validateOrderPayload(body) {
     email:      sanitize(b.email),
     phone:      sanitize(b.phone),
     address_1:  sanitize(b.address_1),
-    address_2:  sanitize(b.address_2),
+    address_2:  sanitize(b.address_2 || ''),
     city:       sanitize(b.city),
-    state:      sanitize(b.state),
-    postcode:   sanitize(b.postcode),
+    state:      sanitize(b.state || ''),
+    postcode:   sanitize(b.postcode || ''),
     country:    sanitize(b.country),
   };
 
