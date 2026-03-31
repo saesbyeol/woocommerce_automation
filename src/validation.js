@@ -28,10 +28,11 @@ function validateOrderPayload(body) {
     }
   }
 
-  if (!b.email || String(b.email).trim() === '') {
-    errors.push('email is required');
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(b.email).trim())) {
-    errors.push('email is not a valid email address');
+  // email is optional — validate format only if provided
+  if (b.email && String(b.email).trim() !== '') {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(b.email).trim())) {
+      errors.push('email is not a valid email address');
+    }
   }
 
   // ── line_items ────────────────────────────────────────────────────────────
