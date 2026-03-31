@@ -70,6 +70,25 @@ async function findProductByName(name) {
     });
   }
 
+  // 4. Most significant words present (≥60%) — handles mismatched names from system prompt
+  if (!match) {
+    const words = needle.split(/\s+/).filter((w) => w.length > 2);
+    if (words.length >= 2) {
+      const threshold = Math.ceil(words.length * 0.6);
+      let bestMatch = null;
+      let bestScore = 0;
+      for (const p of catalog) {
+        const hay = p.name.toLowerCase();
+        const score = words.filter((w) => hay.includes(w)).length;
+        if (score >= threshold && score > bestScore) {
+          bestScore = score;
+          bestMatch = p;
+        }
+      }
+      match = bestMatch;
+    }
+  }
+
   if (!match) {
     throw new Error(`No product found matching "${name}"`);
   }
