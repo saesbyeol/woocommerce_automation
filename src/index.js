@@ -68,6 +68,8 @@ app.get('/products', async (req, res) => {
 
 // POST /create-order
 app.post('/create-order', orderLimiter, async (req, res) => {
+  logger.info('create-order body', { body: req.body });
+
   if (!validateApiKey(req)) {
     logger.warn('Unauthorized request', { ip: req.ip });
     return res.status(401).json({ success: false, message: 'Unauthorized' });
