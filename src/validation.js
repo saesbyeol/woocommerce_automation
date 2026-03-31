@@ -43,7 +43,13 @@ function validateOrderPayload(body) {
     const name = body.product_name ? String(body.product_name).trim() : '';
     const qty  = Number(body.quantity) || 1;
     if (name) {
-      rawItems = [{ product_name: name, quantity: qty }];
+      // If the bot stuffed multiple products into one comma-separated string, split them
+      const parts = name.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        rawItems = parts.map((p) => ({ product_name: p, quantity: 1 }));
+      } else {
+        rawItems = [{ product_name: name, quantity: qty }];
+      }
     } else {
       errors.push('product_name is required');
     }
