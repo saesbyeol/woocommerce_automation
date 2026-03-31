@@ -1,6 +1,8 @@
 'use strict';
 
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const WooCommerceRestApi = require('@woocommerce/woocommerce-rest-api').default;
 const logger = require('./logger');
 
@@ -18,77 +20,35 @@ const getApi = () => {
   return _api;
 };
 
-// ── Product catalog cache (10 min TTL) ────────────────────────────────────────
+// ── Static product catalog (loaded from committed catalog.json) ───────────────
 
-let _cache     = null;
-let _cacheTime = 0;
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const CATALOG_PATH = path.join(__dirname, 'catalog.json');
 
-async function buildCatalog() {
-  // Fetch all published products (paginated)
-  let page = 1;
-  let all  = [];
-  while (true) {
-    const { data } = await getApi().get('products', {
-      status:   'publish',
-      per_page: 100,
-      page,
-    });
-    if (!data || data.length === 0) break;
-    all = all.concat(data);
-    if (data.length < 100) break;
-    page++;
+function loadCatalog() {
+  try {
+    const raw = fs.readFileSync(CATALOG_PATH, 'utf8');
+    const catalog = JSON.parse(raw);
+    logger.info('Product catalog loaded', { count: catalog.length });
+    return catalog;
+  } catch (err) {
+    logger.warn('catalog.json not found or invalid, falling back to empty catalog', { message: err.message });
+    return [];
   }
-
-  const result = [];
-
-  for (const p of all) {
-    if (p.type === 'variable') {
-      try {
-        const { data: variations } = await getApi().get(`products/${p.id}/variations`, { per_page: 50 });
-        for (const v of variations) {
-          const varName = v.attributes.map((a) => a.option).join(' – ');
-          result.push({
-            id:           p.id,
-            variation_id: v.id,
-            name:         `${p.name} – ${varName}`,
-            price:        v.price,
-            in_stock:     v.stock_status === 'instock',
-          });
-        }
-      } catch {
-        result.push({ id: p.id, name: p.name, price: p.price, in_stock: p.stock_status === 'instock' });
-      }
-    } else {
-      result.push({ id: p.id, name: p.name, price: p.price, in_stock: p.stock_status === 'instock' });
-    }
-  }
-
-  logger.info('Product catalog cached', { count: result.length });
-  return result;
 }
 
-async function getCatalog() {
-  const now = Date.now();
-  if (_cache && (now - _cacheTime) < CACHE_TTL) {
-    return _cache;
-  }
-  _cache     = await buildCatalog();
-  _cacheTime = Date.now();
-  return _cache;
-}
+// Load once at startup — no API calls needed
+const catalog = loadCatalog();
 
 // ── getProducts ──────────────────────────────────────────────────────────────
 
 async function getProducts() {
-  return getCatalog();
+  return catalog;
 }
 
 // ── findProductByName ─────────────────────────────────────────────────────────
 
 async function findProductByName(name) {
-  const catalog = await getCatalog();
-  const needle  = name.toLowerCase().trim();
+  const needle = name.toLowerCase().trim();
 
   // 1. Exact match
   let match = catalog.find((p) => p.name.toLowerCase() === needle);
