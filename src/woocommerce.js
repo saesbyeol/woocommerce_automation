@@ -56,11 +56,23 @@ async function getProducts() {
 // ── findProductByName ─────────────────────────────────────────────────────────
 
 async function findProductByName(name) {
-  const { data } = await getApi().get('products', {
-    search:   name,
-    status:   'publish',
-    per_page: 10,
-  });
+  // Build a list of search attempts: full name, without parenthetical, first 3 words
+  const stripped = name.replace(/\s*\(.*?\)\s*/g, '').trim();
+  const firstWords = name.split(' ').slice(0, 3).join(' ');
+  const attempts = [...new Set([name, stripped, firstWords])];
+
+  let data = null;
+  for (const attempt of attempts) {
+    const res = await getApi().get('products', {
+      search:   attempt,
+      status:   'publish',
+      per_page: 10,
+    });
+    if (res.data && res.data.length > 0) {
+      data = res.data;
+      break;
+    }
+  }
 
   if (!data || data.length === 0) {
     throw new Error(`No product found matching "${name}"`);
