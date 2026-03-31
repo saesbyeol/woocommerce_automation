@@ -20,14 +20,24 @@ const getApi = () => {
 // ── getProducts ──────────────────────────────────────────────────────────────
 
 async function getProducts() {
-  const { data } = await getApi().get('products', {
-    status:   'publish',
-    per_page: 100,
-  });
+  // Fetch all pages
+  let page = 1;
+  let all  = [];
+  while (true) {
+    const { data } = await getApi().get('products', {
+      status:   'publish',
+      per_page: 100,
+      page,
+    });
+    if (!data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < 100) break;
+    page++;
+  }
 
   const result = [];
 
-  for (const p of data) {
+  for (const p of all) {
     if (p.type === 'variable') {
       // Fetch variations for variable products
       try {
