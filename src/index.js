@@ -109,6 +109,8 @@ app.use((req, res) => {
 
 app.listen(PORT, () => {
   logger.info('Server started', { port: PORT });
+  // Warm product catalog cache on startup
+  getProducts().catch((err) => logger.warn('Cache warm-up failed', { message: err.message }));
 });
 
 module.exports = app;

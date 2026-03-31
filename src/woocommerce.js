@@ -2,6 +2,7 @@
 
 require('dotenv').config();
 const WooCommerceRestApi = require('@woocommerce/woocommerce-rest-api').default;
+const logger = require('./logger');
 
 let _api = null;
 const getApi = () => {
@@ -17,10 +18,14 @@ const getApi = () => {
   return _api;
 };
 
-// ── getProducts ──────────────────────────────────────────────────────────────
+// ── Product catalog cache (10 min TTL) ────────────────────────────────────────
 
-async function getProducts() {
-  // Fetch all pages
+let _cache     = null;
+let _cacheTime = 0;
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+async function buildCatalog() {
+  // Fetch all published products (paginated)
   let page = 1;
   let all  = [];
   while (true) {
@@ -39,7 +44,6 @@ async function getProducts() {
 
   for (const p of all) {
     if (p.type === 'variable') {
-      // Fetch variations for variable products
       try {
         const { data: variations } = await getApi().get(`products/${p.id}/variations`, { per_page: 50 });
         for (const v of variations) {
@@ -60,23 +64,36 @@ async function getProducts() {
     }
   }
 
-  const logger = require('./logger');
-  logger.info('Product catalog built', { names: result.map((p) => p.name) });
-
+  logger.info('Product catalog cached', { count: result.length });
   return result;
+}
+
+async function getCatalog() {
+  const now = Date.now();
+  if (_cache && (now - _cacheTime) < CACHE_TTL) {
+    return _cache;
+  }
+  _cache     = await buildCatalog();
+  _cacheTime = Date.now();
+  return _cache;
+}
+
+// ── getProducts ──────────────────────────────────────────────────────────────
+
+async function getProducts() {
+  return getCatalog();
 }
 
 // ── findProductByName ─────────────────────────────────────────────────────────
 
 async function findProductByName(name) {
-  // Get the full catalog (includes variations as separate entries)
-  const catalog = await getProducts();
+  const catalog = await getCatalog();
   const needle  = name.toLowerCase().trim();
 
   // 1. Exact match
   let match = catalog.find((p) => p.name.toLowerCase() === needle);
 
-  // 2. One contains the other (handles minor wording differences)
+  // 2. One contains the other
   if (!match) {
     match = catalog.find((p) => {
       const hay = p.name.toLowerCase();
@@ -84,7 +101,7 @@ async function findProductByName(name) {
     });
   }
 
-  // 3. All significant words present (ignores word order / extra words)
+  // 3. All significant words present
   if (!match) {
     const words = needle.split(/\s+/).filter((w) => w.length > 2);
     match = catalog.find((p) => {
@@ -105,7 +122,6 @@ async function findProductByName(name) {
 async function createOrder(parsed) {
   const { billing, line_items, order_note } = parsed;
 
-  // Resolve product names to real IDs + variation IDs
   const resolvedItems = await Promise.all(line_items.map(async (item) => {
     const product = await findProductByName(item.product_name);
     return { product_id: product.id, variation_id: product.variation_id, quantity: item.quantity };
