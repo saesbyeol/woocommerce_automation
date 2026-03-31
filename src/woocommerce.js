@@ -50,6 +50,9 @@ async function getProducts() {
     }
   }
 
+  const logger = require('./logger');
+  logger.info('Product catalog built', { names: result.map((p) => p.name) });
+
   return result;
 }
 
