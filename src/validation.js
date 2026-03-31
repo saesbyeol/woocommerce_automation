@@ -44,11 +44,24 @@ function validateOrderPayload(body) {
     const qty  = Number(body.quantity) || 1;
     if (name) {
       // If the bot stuffed multiple products into one comma-separated string, split them
+      // Each part may have a leading quantity like "2x Galaxy Buds" or "2× Galaxy Buds"
       const parts = name.split(',').map((s) => s.trim()).filter(Boolean);
       if (parts.length > 1) {
-        rawItems = parts.map((p) => ({ product_name: p, quantity: 1 }));
+        rawItems = parts.map((p) => {
+          const qtyMatch = p.match(/^(\d+)\s*[x×]\s*/i);
+          if (qtyMatch) {
+            return { product_name: p.slice(qtyMatch[0].length).trim(), quantity: parseInt(qtyMatch[1], 10) };
+          }
+          return { product_name: p, quantity: 1 };
+        });
       } else {
-        rawItems = [{ product_name: name, quantity: qty }];
+        // Single product — also check for leading quantity prefix
+        const qtyMatch = name.match(/^(\d+)\s*[x×]\s*/i);
+        if (qtyMatch) {
+          rawItems = [{ product_name: name.slice(qtyMatch[0].length).trim(), quantity: parseInt(qtyMatch[1], 10) }];
+        } else {
+          rawItems = [{ product_name: name, quantity: qty }];
+        }
       }
     } else {
       errors.push('product_name is required');
