@@ -56,49 +56,35 @@ async function getProducts() {
 // ── findProductByName ─────────────────────────────────────────────────────────
 
 async function findProductByName(name) {
-  // Build a list of search attempts: full name, without parenthetical, first 3 words
-  const stripped = name.replace(/\s*\(.*?\)\s*/g, '').trim();
-  const firstWords = name.split(' ').slice(0, 3).join(' ');
-  const attempts = [...new Set([name, stripped, firstWords])];
+  // Get the full catalog (includes variations as separate entries)
+  const catalog = await getProducts();
+  const needle  = name.toLowerCase().trim();
 
-  let data = null;
-  for (const attempt of attempts) {
-    const res = await getApi().get('products', {
-      search:   attempt,
-      status:   'publish',
-      per_page: 10,
+  // 1. Exact match
+  let match = catalog.find((p) => p.name.toLowerCase() === needle);
+
+  // 2. One contains the other (handles minor wording differences)
+  if (!match) {
+    match = catalog.find((p) => {
+      const hay = p.name.toLowerCase();
+      return hay.includes(needle) || needle.includes(hay);
     });
-    if (res.data && res.data.length > 0) {
-      data = res.data;
-      break;
-    }
   }
 
-  if (!data || data.length === 0) {
+  // 3. All significant words present (ignores word order / extra words)
+  if (!match) {
+    const words = needle.split(/\s+/).filter((w) => w.length > 2);
+    match = catalog.find((p) => {
+      const hay = p.name.toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
+  }
+
+  if (!match) {
     throw new Error(`No product found matching "${name}"`);
   }
 
-  const product = data[0];
-
-  // If variable product, search variations for the best match
-  if (product.type === 'variable') {
-    const { data: variations } = await getApi().get(`products/${product.id}/variations`, { per_page: 50 });
-    const nameLower = name.toLowerCase();
-
-    // Try to find a variation whose attributes match the search name
-    const matched = variations.find((v) =>
-      v.attributes.some((a) => nameLower.includes(a.option.toLowerCase()))
-    );
-
-    if (matched) {
-      return { id: product.id, variation_id: matched.id };
-    }
-
-    // Fall back to first variation
-    return { id: product.id, variation_id: variations[0]?.id || null };
-  }
-
-  return { id: product.id, variation_id: null };
+  return { id: match.id, variation_id: match.variation_id || null };
 }
 
 // ── createOrder ──────────────────────────────────────────────────────────────
