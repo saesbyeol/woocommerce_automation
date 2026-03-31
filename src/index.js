@@ -90,7 +90,7 @@ app.post('/create-order', orderLimiter, async (req, res) => {
       logger.warn('Product not found', { message: err.message });
       return res.status(400).json({ success: false, message: err.message });
     }
-    logger.error('Order creation failed', { message: err.message });
+    logger.error('Order creation failed', { message: err.message, response: err.response && err.response.data });
     res.status(500).json({ success: false, message: 'Failed to create order' });
   }
 });
