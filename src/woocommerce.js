@@ -87,10 +87,15 @@ async function createOrder(parsed) {
     return { product_id: product.id, variation_id: product.variation_id, quantity: item.quantity };
   }));
 
+  const billingWithEmail = {
+    ...billing,
+    email: billing.email || 'noemail@tradershop.rs',
+  };
+
   const { data: order } = await getApi().post('orders', {
     status:               'pending',
-    billing,
-    shipping:             billing,
+    billing:              billingWithEmail,
+    shipping:             billingWithEmail,
     line_items:           resolvedItems.map((item) => {
       const li = { product_id: item.product_id, quantity: item.quantity };
       if (item.variation_id) li.variation_id = item.variation_id;
