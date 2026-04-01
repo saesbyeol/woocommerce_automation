@@ -96,6 +96,21 @@ async function findProductByName(name) {
   return { id: match.id, variation_id: match.variation_id || null };
 }
 
+// ── Shipping ──────────────────────────────────────────────────────────────────
+// Product IDs that incur 500 din shipping; all others are 450 din
+const SHIPPING_500_IDS = new Set([
+  20497, // Krevetac sa ljuljaškom, baldahinom i mrežom protiv komaraca za bebe
+  15090, // Aku Trimer za Travu sa 2 Baterije
+  15394, // Makita 2 u 1 aku set
+  15364, // Njihalica - Automatska baby ležaljka (električna ljuljaška za bebe)
+  31538, // Aku set za orezivanje 5u1
+]);
+
+function calcShipping(resolvedItems) {
+  const needs500 = resolvedItems.some((item) => SHIPPING_500_IDS.has(item.product_id));
+  return needs500 ? '500' : '450';
+}
+
 // ── createOrder ──────────────────────────────────────────────────────────────
 
 async function createOrder(parsed) {
@@ -111,6 +126,8 @@ async function createOrder(parsed) {
     email: billing.email || 'noemail@tradershop.rs',
   };
 
+  const shippingTotal = calcShipping(resolvedItems);
+
   const { data: order } = await getApi().post('orders', {
     status:               'pending',
     billing:              billingWithEmail,
@@ -120,6 +137,13 @@ async function createOrder(parsed) {
       if (item.variation_id) li.variation_id = item.variation_id;
       return li;
     }),
+    shipping_lines: [
+      {
+        method_id:    'flat_rate',
+        method_title: 'PostExpress / SpeedyExpress',
+        total:        shippingTotal,
+      },
+    ],
     payment_method:       'cod',
     payment_method_title: 'Cash on Delivery',
     customer_note:        order_note || '',
