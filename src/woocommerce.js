@@ -129,7 +129,7 @@ async function createOrder(parsed) {
   const shippingTotal = calcShipping(resolvedItems);
 
   const { data: order } = await getApi().post('orders', {
-    status:               'pending',
+    status:               'processing',
     billing:              billingWithEmail,
     shipping:             billingWithEmail,
     line_items:           resolvedItems.map((item) => {
