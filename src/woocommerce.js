@@ -96,6 +96,26 @@ async function findProductByName(name) {
   return { id: match.id, variation_id: match.variation_id || null };
 }
 
+// ── Country name → ISO code ───────────────────────────────────────────────────
+const COUNTRY_MAP = {
+  'srbija': 'RS', 'serbia': 'RS',
+  'bosna i hercegovina': 'BA', 'bosna': 'BA', 'bih': 'BA',
+  'hrvatska': 'HR', 'croatia': 'HR',
+  'slovenija': 'SI', 'slovenia': 'SI',
+  'crna gora': 'ME', 'montenegro': 'ME',
+  'makedonija': 'MK', 'severna makedonija': 'MK', 'north macedonia': 'MK',
+  'nemačka': 'DE', 'germany': 'DE',
+  'austrija': 'AT', 'austria': 'AT',
+  'švajcarska': 'CH', 'switzerland': 'CH',
+  'mađarska': 'HU', 'hungary': 'HU',
+};
+
+function resolveCountry(value) {
+  if (!value) return value;
+  const lower = value.trim().toLowerCase();
+  return COUNTRY_MAP[lower] || value.trim().toUpperCase();
+}
+
 // ── Shipping ──────────────────────────────────────────────────────────────────
 // Product IDs that incur 500 din shipping; all others are 450 din
 const SHIPPING_500_IDS = new Set([
@@ -123,7 +143,8 @@ async function createOrder(parsed) {
 
   const billingWithEmail = {
     ...billing,
-    email: billing.email || 'noemail@tradershop.rs',
+    email:   billing.email || 'noemail@tradershop.rs',
+    country: resolveCountry(billing.country),
   };
 
   const shippingTotal = calcShipping(resolvedItems);
