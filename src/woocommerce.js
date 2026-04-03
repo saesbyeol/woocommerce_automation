@@ -136,10 +136,22 @@ function calcShipping(resolvedItems) {
 async function createOrder(parsed) {
   const { billing, line_items, order_note } = parsed;
 
-  const resolvedItems = await Promise.all(line_items.map(async (item) => {
+  const rawResolved = await Promise.all(line_items.map(async (item) => {
     const product = await findProductByName(item.product_name);
     return { product_id: product.id, variation_id: product.variation_id, quantity: item.quantity };
   }));
+
+  // Merge duplicate product+variation entries to avoid double quantities
+  const seen = new Map();
+  for (const item of rawResolved) {
+    const key = `${item.product_id}-${item.variation_id || 0}`;
+    if (seen.has(key)) {
+      seen.get(key).quantity += item.quantity;
+    } else {
+      seen.set(key, { ...item });
+    }
+  }
+  const resolvedItems = Array.from(seen.values());
 
   const billingWithEmail = {
     ...billing,
