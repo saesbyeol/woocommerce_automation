@@ -39,6 +39,12 @@ function loadCatalog() {
 // Load once at startup — no API calls needed
 const catalog = loadCatalog();
 
+// ── Aliases (wrong bot names → correct product names) ─────────────────────────
+const ALIASES_PATH = path.join(__dirname, 'aliases.json');
+const aliases = (() => {
+  try { return JSON.parse(fs.readFileSync(ALIASES_PATH, 'utf8')); } catch { return {}; }
+})();
+
 // ── getProducts ──────────────────────────────────────────────────────────────
 
 async function getProducts() {
@@ -47,8 +53,20 @@ async function getProducts() {
 
 // ── findProductByName ─────────────────────────────────────────────────────────
 
-async function findProductByName(name) {
+async function findProductByName(name, context) {
   const needle = name.toLowerCase().trim();
+
+  // 0. Check aliases — redirect known wrong names to correct product names
+  const alias = aliases[needle];
+  if (alias) {
+    const ctx = (context || '').toLowerCase();
+    let resolved = alias.default;
+    for (const [hint, target] of Object.entries(alias.hints || {})) {
+      if (ctx.includes(hint)) { resolved = target; break; }
+    }
+    logger.info('Alias matched', { from: name, to: resolved, context });
+    return findProductByName(resolved, context);
+  }
 
   // 1. Exact match
   let match = catalog.find((p) => p.name.toLowerCase() === needle);
@@ -162,7 +180,7 @@ async function createOrder(parsed) {
   const { billing, line_items, order_note } = parsed;
 
   const rawResolved = await Promise.all(line_items.map(async (item) => {
-    const product = await findProductByName(item.product_name);
+    const product = await findProductByName(item.product_name, order_note);
     return { product_id: product.id, variation_id: product.variation_id, quantity: item.quantity };
   }));
 

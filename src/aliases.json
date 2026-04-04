@@ -1,0 +1,16 @@
+{
+  "kruta lula": {
+    "default": "Delimano česma sa grejačem – iz sudopere kruto",
+    "hints": {
+      "sudoper": "Delimano česma sa grejačem – iz sudopere kruto",
+      "zid": "Delimano česma sa grejačem – Iz zida kruto"
+    }
+  },
+  "fleksibilna lula": {
+    "default": "Delimano česma sa grejačem – iz sudopere fleks",
+    "hints": {
+      "sudoper": "Delimano česma sa grejačem – iz sudopere fleks",
+      "zid": "Delimano česma sa grejačem – iz zida fleks"
+    }
+  }
+}
