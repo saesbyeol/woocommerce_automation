@@ -64,10 +64,18 @@ async function findProductByName(name) {
   // 3. All significant words present
   if (!match) {
     const words = needle.split(/\s+/).filter((w) => w.length > 1);
-    match = catalog.find((p) => {
-      const hay = p.name.toLowerCase();
-      return words.every((w) => hay.includes(w));
-    });
+    const tier3Matches = catalog.filter((p) => words.every((w) => p.name.toLowerCase().includes(w)));
+    if (tier3Matches.length > 1) {
+      const uniqueParentIds = new Set(tier3Matches.map((p) => p.id));
+      if (uniqueParentIds.size === 1) {
+        const options = tier3Matches.map((p) => p.name.split('–').pop().trim());
+        const isSizeVariation = options.some((o) => /\d/.test(o));
+        if (isSizeVariation) {
+          throw new Error(`Multiple variations found for "${name}". Please specify which one: ${options.join(', ')}`);
+        }
+      }
+    }
+    match = tier3Matches[0] || null;
   }
 
   // 4. Most significant words present (≥60%) — handles mismatched names from system prompt
@@ -75,17 +83,34 @@ async function findProductByName(name) {
     const words = needle.split(/\s+/).filter((w) => w.length > 1);
     if (words.length >= 2) {
       const threshold = Math.ceil(words.length * 0.6);
-      let bestMatch = null;
       let bestScore = 0;
+      const bestMatches = [];
       for (const p of catalog) {
         const hay = p.name.toLowerCase();
         const score = words.filter((w) => hay.includes(w)).length;
-        if (score >= threshold && score > bestScore) {
-          bestScore = score;
-          bestMatch = p;
+        if (score >= threshold) {
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatches.length = 0;
+            bestMatches.push(p);
+          } else if (score === bestScore) {
+            bestMatches.push(p);
+          }
         }
       }
-      match = bestMatch;
+      // If multiple variations of the same product match equally, we can't determine
+      // which variation the customer wants — force the bot to be more specific
+      if (bestMatches.length > 1) {
+        const uniqueParentIds = new Set(bestMatches.map((p) => p.id));
+        if (uniqueParentIds.size === 1) {
+          const options = bestMatches.map((p) => p.name.split('–').pop().trim());
+          const isSizeVariation = options.some((o) => /\d/.test(o));
+          if (isSizeVariation) {
+            throw new Error(`Multiple variations found for "${name}". Please specify which one: ${options.join(', ')}`);
+          }
+        }
+      }
+      match = bestMatches[0] || null;
     }
   }
 
