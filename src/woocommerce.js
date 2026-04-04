@@ -63,7 +63,7 @@ async function findProductByName(name) {
 
   // 3. All significant words present
   if (!match) {
-    const words = needle.split(/\s+/).filter((w) => w.length > 2);
+    const words = needle.split(/\s+/).filter((w) => w.length > 1);
     match = catalog.find((p) => {
       const hay = p.name.toLowerCase();
       return words.every((w) => hay.includes(w));
@@ -72,7 +72,7 @@ async function findProductByName(name) {
 
   // 4. Most significant words present (≥60%) — handles mismatched names from system prompt
   if (!match) {
-    const words = needle.split(/\s+/).filter((w) => w.length > 2);
+    const words = needle.split(/\s+/).filter((w) => w.length > 1);
     if (words.length >= 2) {
       const threshold = Math.ceil(words.length * 0.6);
       let bestMatch = null;
