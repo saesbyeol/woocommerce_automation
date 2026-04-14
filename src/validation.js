@@ -43,10 +43,11 @@ function validateOrderPayload(body) {
     const name = body.product_name ? String(body.product_name).trim() : '';
     const qty  = Number(body.quantity) || 1;
     if (name) {
-      // If the bot stuffed multiple products into one comma-separated string, split them
-      // Each part may have a leading quantity like "2x Galaxy Buds" or "2× Galaxy Buds"
+      // Only split by comma when at least one part starts with a quantity prefix (Nx or N×)
+      // This avoids splitting product names that contain commas (e.g. "Krevetac sa ljuljaškom, baldahinom...")
       const parts = name.split(',').map((s) => s.trim()).filter(Boolean);
-      if (parts.length > 1) {
+      const hasQtyPrefix = parts.some((p) => /^(\d+)\s*[x×]\s*/i.test(p));
+      if (parts.length > 1 && hasQtyPrefix) {
         rawItems = parts.map((p) => {
           const qtyMatch = p.match(/^(\d+)\s*[x×]\s*/i);
           if (qtyMatch) {
@@ -55,7 +56,7 @@ function validateOrderPayload(body) {
           return { product_name: p, quantity: 1 };
         });
       } else {
-        // Single product — also check for leading quantity prefix
+        // Single product — check for leading quantity prefix only
         const qtyMatch = name.match(/^(\d+)\s*[x×]\s*/i);
         if (qtyMatch) {
           rawItems = [{ product_name: name.slice(qtyMatch[0].length).trim(), quantity: parseInt(qtyMatch[1], 10) }];
