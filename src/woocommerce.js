@@ -45,6 +45,42 @@ const aliases = (() => {
   try { return JSON.parse(fs.readFileSync(ALIASES_PATH, 'utf8')); } catch { return {}; }
 })();
 
+// ── Serbian word stemmer ──────────────────────────────────────────────────────
+// Strips common inflection endings so "sivi"/"siva"/"sive" all stem to "siv"
+function stemWord(word) {
+  if (word.length < 4) return word;
+  return word.replace(/[aeio]$/i, '');
+}
+
+function wordsMatch(needleWord, hayWord) {
+  if (hayWord.includes(needleWord)) return true;
+  // Try stemmed comparison for words >= 4 chars
+  if (needleWord.length >= 4 && hayWord.length >= 4) {
+    return stemWord(hayWord).startsWith(stemWord(needleWord)) ||
+           stemWord(needleWord).startsWith(stemWord(hayWord));
+  }
+  return false;
+}
+
+// Pick the color variation that best matches the needle.
+// Scored by proportion of variation words matched — so "Siva" (1/1 = 100%)
+// beats "Šareno sivi" (1/2 = 50%) when the needle only mentions "sivi".
+function pickBestColorVariant(candidates, needle) {
+  let best = candidates[0];
+  let bestScore = -1;
+  const needleWords = needle.split(/\s+/).filter(w => w.length > 1);
+  for (const p of candidates) {
+    const varPart = p.name.split('–').pop().toLowerCase().trim();
+    const varWords = varPart.split(/\s+/).filter(w => w.length > 1);
+    if (varWords.length === 0) continue;
+    const matched = varWords.filter(vw => needleWords.some(nw => wordsMatch(vw, nw))).length;
+    // Use proportion so a short exact match beats a long partial match
+    const score = matched / varWords.length;
+    if (score > bestScore) { bestScore = score; best = p; }
+  }
+  return best;
+}
+
 // ── getProducts ──────────────────────────────────────────────────────────────
 
 async function getProducts() {
@@ -79,10 +115,14 @@ async function findProductByName(name, context) {
     });
   }
 
-  // 3. All significant words present
+  // 3. All significant words present (with stemmed matching)
   if (!match) {
     const words = needle.split(/\s+/).filter((w) => w.length > 1);
-    const tier3Matches = catalog.filter((p) => words.every((w) => p.name.toLowerCase().includes(w)));
+    const tier3Matches = catalog.filter((p) => {
+      const hay = p.name.toLowerCase();
+      const hayWords = hay.split(/\s+/);
+      return words.every((w) => hayWords.some((hw) => wordsMatch(w, hw)));
+    });
     if (tier3Matches.length > 1) {
       const uniqueParentIds = new Set(tier3Matches.map((p) => p.id));
       if (uniqueParentIds.size === 1) {
@@ -91,9 +131,11 @@ async function findProductByName(name, context) {
         if (isSizeVariation) {
           throw new Error(`Multiple variations found for "${name}". Please specify which one: ${options.join(', ')}`);
         }
+        // Color variations — pick the one whose color best matches the needle
+        match = pickBestColorVariant(tier3Matches, needle);
       }
     }
-    match = tier3Matches[0] || null;
+    if (!match) match = tier3Matches[0] || null;
   }
 
   // 4. Most significant words present (≥60%) — handles mismatched names from system prompt
