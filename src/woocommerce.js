@@ -93,14 +93,16 @@ async function findProductByName(name, context) {
   const needle = name.toLowerCase().trim();
 
   // 0. Check aliases — redirect known wrong names to correct product names
-  const alias = aliases[needle];
-  if (alias) {
-    const ctx = (context || '').toLowerCase();
+  // Check both exact key match and partial key match (needle contains the alias key)
+  const aliasKey = Object.keys(aliases).find((k) => needle === k || needle.includes(k));
+  if (aliasKey) {
+    const alias = aliases[aliasKey];
+    const ctx = (context || '').toLowerCase() + ' ' + needle;
     let resolved = alias.default;
     for (const [hint, target] of Object.entries(alias.hints || {})) {
       if (ctx.includes(hint)) { resolved = target; break; }
     }
-    logger.info('Alias matched', { from: name, to: resolved, context });
+    logger.info('Alias matched', { from: name, to: resolved });
     return findProductByName(resolved, context);
   }
 
