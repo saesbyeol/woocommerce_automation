@@ -142,9 +142,9 @@ async function findProductByName(name, context) {
 
   // 4. Most significant words present (≥60%) — handles mismatched names from system prompt
   if (!match) {
-    const words = needle.split(/\s+/).filter((w) => w.length > 1);
+    const words = [...new Set(needle.split(/\s+/).filter((w) => w.length > 1))];
     if (words.length >= 2) {
-      const threshold = Math.ceil(words.length * 0.6);
+      const threshold = Math.ceil(words.length * 0.7);
       let bestScore = 0;
       const bestMatches = [];
       for (const p of catalog) {
