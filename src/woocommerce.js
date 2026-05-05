@@ -36,8 +36,38 @@ function loadCatalog() {
   }
 }
 
-// Load once at startup — no API calls needed
-const catalog = loadCatalog();
+// Loaded at startup; replaced in-memory by syncCatalog() without a restart
+let catalog = loadCatalog();
+
+async function syncCatalog() {
+  const api = getApi();
+  let page = 1;
+  const fresh = [];
+  while (true) {
+    const { data } = await api.get('products', { status: 'publish', per_page: 100, page });
+    if (!data || data.length === 0) break;
+    for (const p of data) {
+      if (p.type === 'variable') {
+        try {
+          const { data: variations } = await api.get(`products/${p.id}/variations`, { per_page: 50 });
+          for (const v of variations) {
+            const varName = v.attributes.map((a) => a.option).join(' – ');
+            fresh.push({ id: p.id, variation_id: v.id, name: `${p.name} – ${varName}`, price: v.price, in_stock: v.stock_status === 'instock' });
+          }
+        } catch {
+          fresh.push({ id: p.id, name: p.name, price: p.price, in_stock: p.stock_status === 'instock' });
+        }
+      } else {
+        fresh.push({ id: p.id, name: p.name, price: p.price, in_stock: p.stock_status === 'instock' });
+      }
+    }
+    if (data.length < 100) break;
+    page++;
+  }
+  catalog = fresh;
+  logger.info('Catalog synced from WooCommerce', { count: fresh.length });
+  return fresh.length;
+}
 
 // ── Aliases (wrong bot names → correct product names) ─────────────────────────
 const ALIASES_PATH = path.join(__dirname, 'aliases.json');
@@ -275,4 +305,4 @@ async function createOrder(parsed) {
   };
 }
 
-module.exports = { getProducts, createOrder };
+module.exports = { getProducts, createOrder, syncCatalog };

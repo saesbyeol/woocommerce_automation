@@ -7,7 +7,7 @@ const helmet    = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const logger    = require('./logger');
-const { getProducts, createOrder } = require('./woocommerce');
+const { getProducts, createOrder, syncCatalog } = require('./woocommerce');
 const { validateApiKey, validateOrderPayload } = require('./validation');
 
 const app  = express();
@@ -92,6 +92,22 @@ app.post('/create-order', orderLimiter, async (req, res) => {
     }
     logger.error('Order creation failed', { message: err.message, response: err.response && err.response.data });
     res.status(500).json({ success: false, message: 'Failed to create order' });
+  }
+});
+
+// POST /admin/sync-catalog
+app.post('/admin/sync-catalog', async (req, res) => {
+  const secret = process.env.CHATBASE_WEBHOOK_SECRET;
+  const provided = (req.headers['authorization'] || '').replace('Bearer ', '');
+  if (!secret || provided !== secret) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+  try {
+    const count = await syncCatalog();
+    res.json({ success: true, message: `Catalog synced: ${count} products loaded` });
+  } catch (err) {
+    logger.error('Catalog sync failed', { message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
