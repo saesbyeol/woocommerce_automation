@@ -45,7 +45,7 @@ function validateOrderPayload(body) {
     if (name) {
       // Only split by comma when at least one part starts with a quantity prefix (Nx or N×)
       // This avoids splitting product names that contain commas (e.g. "Krevetac sa ljuljaškom, baldahinom...")
-      const parts = name.split(',').map((s) => s.trim()).filter(Boolean);
+      const parts = name.split(/,\s+/).map((s) => s.trim()).filter(Boolean);
       const hasQtyPrefix = parts.some((p) => /^(\d+)\s*[x×]\s*/i.test(p));
       if (parts.length > 1 && hasQtyPrefix) {
         rawItems = parts.map((p) => {
