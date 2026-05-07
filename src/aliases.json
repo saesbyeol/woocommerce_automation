@@ -1,4 +1,13 @@
 {
+  "električna ljuljaška za bebe": {
+    "default": "Njihalica - Automatska baby ležaljka za uspavljivanje – električna kolevka i ljuljaška za bebe – Siva",
+    "hints": {
+      "plava": "Njihalica - Automatska baby ležaljka za uspavljivanje – električna kolevka i ljuljaška za bebe – Plava",
+      "siva": "Njihalica - Automatska baby ležaljka za uspavljivanje – električna kolevka i ljuljaška za bebe – Siva",
+      "roze": "Njihalica - Automatska baby ležaljka za uspavljivanje – električna kolevka i ljuljaška za bebe – Roze",
+      "roza": "Njihalica - Automatska baby ležaljka za uspavljivanje – električna kolevka i ljuljaška za bebe – Roze"
+    }
+  },
   "kruta lula": {
     "default": "Delimano česma sa grejačem – iz sudopere kruto",
     "hints": {
