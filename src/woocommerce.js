@@ -119,8 +119,13 @@ async function getProducts() {
 
 // ── findProductByName ─────────────────────────────────────────────────────────
 
+function normalizeText(str) {
+  // Strip punctuation that bots attach to words, e.g. "(instant" or "česma)"
+  return str.replace(/[()[\]{},;!?]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 async function findProductByName(name, context) {
-  const needle = name.toLowerCase().trim();
+  const needle = normalizeText(name.toLowerCase().trim());
 
   // 0. Check aliases — redirect known wrong names to correct product names
   // Check both exact key match and partial key match (needle contains the alias key)
